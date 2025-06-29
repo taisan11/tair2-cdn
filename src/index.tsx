@@ -10,6 +10,11 @@ interface Bindings {
   VIEW_LIST_WITH_PASS?: string
 }
 
+interface R2Range {
+  offset: number
+  length?: number
+}
+
 const app = new Hono<{Bindings:Bindings}>()
 app.use("*",etag({}))
 app.use("/files/*", cache({
@@ -211,24 +216,27 @@ app.get('/files/:fileName', async (c) => {
   let selectedEncoding = null
   let r2Key = fileName
 
+  // Rangeヘッダーをパース
+  const rangeHeader = c.req.header("Range")
+  const rangeOptions = rangeHeader ? parseRangeHeader(rangeHeader) : undefined
+
   if (acceptEncoding.includes("gzip")) {
     const gzipKey = `${fileName}.gz`
     const gzipObject = await c.env.tair2_cdn.get(gzipKey, {
-      range: c.req.header("Range") || undefined
+      range: rangeOptions
     })
     
     if (gzipObject) {
       cacheKey = `${fileName}-gzip`
       selectedEncoding = "gzip"
       r2Key = gzipKey
-      return createFileResponse(gzipObject, fileName, "gzip", c.req.header("Range"), cacheKey)
+      return createFileResponse(gzipObject, fileName, "gzip", rangeHeader, cacheKey)
     }
   }
 
   // gzip版が見つからない場合、元ファイルを探す
-  const rangeHeader = c.req.header("Range")
   const object = await c.env.tair2_cdn.get(fileName, {
-    range: rangeHeader || undefined
+    range: rangeOptions
   })
 
   if (!object) {
@@ -325,6 +333,30 @@ async function compressFile(file: File, format: 'gzip'): Promise<ReadableStream>
   }
   
   throw new Error(`Unsupported compression format: ${format}`)
+}
+
+// RangeヘッダーをパースしてR2Range形式に変換
+function parseRangeHeader(rangeHeader: string): R2Range | undefined {
+  // Range: bytes=start-end の形式をパース
+  const match = rangeHeader.match(/^bytes=(\d+)-(\d*)$/)
+  if (!match) return undefined
+  
+  const start = parseInt(match[1], 10)
+  const endStr = match[2]
+  
+  if (endStr === '') {
+    // bytes=start- の形式（開始位置から最後まで）
+    return {
+      offset: start
+    }
+  } else {
+    // bytes=start-end の形式
+    const end = parseInt(endStr, 10)
+    return {
+      offset: start,
+      length: end - start + 1
+    }
+  }
 }
 
 // 404ハンドラー
