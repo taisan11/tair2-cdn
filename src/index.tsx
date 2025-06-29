@@ -10,10 +10,13 @@ interface Bindings {
   VIEW_LIST_WITH_PASS?: string
 }
 
+// R2Range型定義（一時的にコメントアウト）
+/*
 interface R2Range {
   offset: number
   length?: number
 }
+*/
 
 const app = new Hono<{Bindings:Bindings}>()
 app.use("*",etag({}))
@@ -216,28 +219,31 @@ app.get('/files/:fileName', async (c) => {
   let selectedEncoding = null
   let r2Key = fileName
 
-  // Rangeヘッダーをパース
-  const rangeHeader = c.req.header("Range")
-  const rangeOptions = rangeHeader ? parseRangeHeader(rangeHeader) : undefined
+  // Rangeヘッダーをパース（一時的にコメントアウト）
+  // const rangeHeader = c.req.header("Range")
+  // const rangeOptions = rangeHeader ? parseRangeHeader(rangeHeader) : undefined
 
   if (acceptEncoding.includes("gzip")) {
     const gzipKey = `${fileName}.gz`
-    const gzipObject = await c.env.tair2_cdn.get(gzipKey, {
-      range: rangeOptions
-    })
+    const gzipObject = await c.env.tair2_cdn.get(gzipKey)
+    // const gzipObject = await c.env.tair2_cdn.get(gzipKey, {
+    //   range: rangeOptions
+    // })
     
     if (gzipObject) {
       cacheKey = `${fileName}-gzip`
       selectedEncoding = "gzip"
       r2Key = gzipKey
-      return createFileResponse(gzipObject, fileName, "gzip", rangeHeader, cacheKey)
+      return createFileResponse(gzipObject, fileName, "gzip", undefined, cacheKey)
+      // return createFileResponse(gzipObject, fileName, "gzip", rangeHeader, cacheKey)
     }
   }
 
   // gzip版が見つからない場合、元ファイルを探す
-  const object = await c.env.tair2_cdn.get(fileName, {
-    range: rangeOptions
-  })
+  const object = await c.env.tair2_cdn.get(fileName)
+  // const object = await c.env.tair2_cdn.get(fileName, {
+  //   range: rangeOptions
+  // })
 
   if (!object) {
     return c.render(
@@ -256,15 +262,17 @@ app.get('/files/:fileName', async (c) => {
   }
 
   cacheKey = `${fileName}-original`
-  return createFileResponse(object, fileName, null, rangeHeader, cacheKey)
+  return createFileResponse(object, fileName, null, undefined, cacheKey)
+  // return createFileResponse(object, fileName, null, rangeHeader, cacheKey)
 })
 
 function createFileResponse(object: any, fileName: string, encoding: string | null, rangeHeader: string | undefined, cacheKey?: string) {
   const headers = new Headers()
   
-  if (object.range) {
-    headers.set("Content-Range", object.range)
-  }
+  // Rangeサポートを一時的にコメントアウト
+  // if (object.range) {
+  //   headers.set("Content-Range", object.range)
+  // }
 
   headers.set("Content-Type", getContentType(fileName))
   if (encoding) {
@@ -281,7 +289,8 @@ function createFileResponse(object: any, fileName: string, encoding: string | nu
   }
 
   return new Response(object.body, {
-    status: object.range ? 206 : 200,
+    status: 200, // 常に200を返す（Rangeサポート無効のため）
+    // status: object.range ? 206 : 200,
     headers
   })
 }
@@ -335,7 +344,8 @@ async function compressFile(file: File, format: 'gzip'): Promise<ReadableStream>
   throw new Error(`Unsupported compression format: ${format}`)
 }
 
-// RangeヘッダーをパースしてR2Range形式に変換
+// RangeヘッダーをパースしてR2Range形式に変換（一時的にコメントアウト）
+/*
 function parseRangeHeader(rangeHeader: string): R2Range | undefined {
   // Range: bytes=start-end の形式をパース
   const match = rangeHeader.match(/^bytes=(\d+)-(\d*)$/)
@@ -358,6 +368,7 @@ function parseRangeHeader(rangeHeader: string): R2Range | undefined {
     }
   }
 }
+*/
 
 // 404ハンドラー
 app.notFound((c) => {
