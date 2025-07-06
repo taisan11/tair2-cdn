@@ -283,9 +283,26 @@ function createFileResponse(object: any, fileName: string, encoding: string | nu
   // Varyヘッダーで圧縮方式に応じたキャッシュを指示
   headers.set("Vary", "Accept-Encoding")
   
-  // ETagにキャッシュキーを含める
+  // ETagにキャッシュキーを含める（ASCIIのみ許容）
   if (cacheKey) {
-    headers.set("ETag", `"${cacheKey}-${object.etag || 'default'}"`)
+    // 非ASCII文字が含まれている場合はBase64化（unescape非推奨なのでTextEncoderを利用）
+    function toBase64Ascii(str: string): string {
+      const bytes = new TextEncoder().encode(str);
+      let binary = '';
+      for (let i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      return btoa(binary);
+    }
+    let asciiCacheKey = cacheKey;
+    if (/[^\x00-\x7F]/.test(cacheKey)) {
+      asciiCacheKey = toBase64Ascii(cacheKey);
+    }
+    let asciiEtag = object.etag || 'default';
+    if (/[^\x00-\x7F]/.test(asciiEtag)) {
+      asciiEtag = toBase64Ascii(asciiEtag);
+    }
+    headers.set("ETag", `"${asciiCacheKey}-${asciiEtag}"`)
   }
 
   return new Response(object.body, {
