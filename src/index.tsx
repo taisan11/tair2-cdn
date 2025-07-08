@@ -270,9 +270,13 @@ app.get("/upload/:name", async (c) => {
 
 app.get("/download/:name", async (c) => {
   const name = c.req.param("name")
+  const filename = await c.env.tair2_cdn_kv.get(name)
+  if (!filename) {
+    return c.json({ error: 'Upload link not found' }, 404)
+  }
   c.header("Cache-Control", "public, max-age=31536000, immutable")
   c.header("Vary", "Accept-Encoding")
-  return c.redirect(`/files/${name}`, 302)
+  return c.redirect(`/files/${filename}`, 302)
 })
 
 app.get('/files/:fileName', async (c) => {
