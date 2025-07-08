@@ -76,17 +76,20 @@ const UploadForm = () => {
     return (
         <>
             <form onSubmit={handleSubmit}>
-                <div class="form-group">
-                    <label for="api-key">API Key (if required):</label>
-                    <input 
-                        id="api-key" 
-                        type="password" 
-                        value={apiKey}
-                        onChange={(e) => setApiKey((e.target as HTMLInputElement).value)}
-                        placeholder="Enter API key (optional)"
-                    />
-                </div>
-                
+                {/* nameがない場合のみAPI Key入力を表示 */}
+                {!name && (
+                    <div class="form-group">
+                        <label for="api-key">API Key (if required):</label>
+                        <input 
+                            id="api-key" 
+                            type="password" 
+                            value={apiKey}
+                            onChange={(e) => setApiKey((e.target as HTMLInputElement).value)}
+                            placeholder="Enter API key (optional)"
+                        />
+                    </div>
+                )}
+
                 <div class="form-group">
                     <label for="file-upload" class="file-label">
                         {file ? file.name : 'Select a file'}
@@ -105,7 +108,6 @@ const UploadForm = () => {
                         <span>{name}</span>
                     </div>
                 )}
-                
                 <button type="submit" disabled={!file}>Upload</button>
             </form>
             <input type="text" id="downloadUrl" placeholder="Download URL" value={downloadUrl} readOnly />

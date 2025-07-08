@@ -98,12 +98,10 @@ app.post("/upload", async (c) => {
   let uploadFileName = file.name
 
   if (name) {
-    const kvFileName = await c.env.tair2_cdn_kv.get(name)
-    if (kvFileName) {
-      uploadFileName = kvFileName
-      await c.env.tair2_cdn_kv.put(name, uploadFileName)
-    }
+    await c.env.tair2_cdn_kv.put(name, file.name)
+    uploadFileName = file.name
   } else {
+    // 通常のAPIキー認証
     if (c.env.API_KEY) {
       const apiKey = c.req.header("x-api-key") || c.req.query("key")
       if (apiKey !== c.env.API_KEY) {
@@ -224,15 +222,9 @@ app.get('/files', async (c) => {
   )
 })
 
-const uploadKeySchema = v.object({
-  // APIキー
-  key: v.string(),
-  // ID
-  name:v.string()
-})
-
-app.post("/api/uploadkey", vValidator("json",uploadKeySchema), async (c) => {
-  const { key, name } = c.req.valid("json")
+app.post("/api/uploadkey", async (c) => {
+  // const { key, name } = c.req.valid("json")
+  const {key, name} = await c.req.json()
   // API認証チェック
   if (c.env.API_KEY && key !== c.env.API_KEY) {
     return c.json({ error: 'Unauthorized' }, 401)
