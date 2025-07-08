@@ -7,16 +7,17 @@ const UploadForm = () => {
     const [status, setStatus] = useState<string>('ready')
     const [downloadUrl, setDownloadUrl] = useState<string>('')
     const [apiKey, setApiKey] = useState<string>('')
+    const [name, setName] = useState<string>('')
 
-    // 追加: name属性を取得する
+    // name属性を取得する
     useEffect(() => {
         const formDiv = document.getElementById('form')
         if (formDiv && formDiv.hasAttribute('name')) {
             setName(formDiv.getAttribute('name') || '')
+        } else {
+            setName('') // name属性がなければ空文字にする
         }
     }, [])
-
-    const [name, setName] = useState<string>('')
 
     const handleSubmit = async (e: Event) => {
         e.preventDefault()
@@ -96,10 +97,18 @@ const UploadForm = () => {
                         onChange={(e) => setFile((e.target as HTMLInputElement).files?.[0] || null)} 
                     />
                 </div>
+
+                {/* name属性があれば表示 */}
+                {name && (
+                    <div class="form-group">
+                        <label>Name attribute:</label>
+                        <span>{name}</span>
+                    </div>
+                )}
                 
                 <button type="submit" disabled={!file}>Upload</button>
             </form>
-            <input type="text" id="downloadUrl" placeholder="Download URL" value={downloadUrl} readonly />
+            <input type="text" id="downloadUrl" placeholder="Download URL" value={downloadUrl} readOnly />
             <div class="status-bar">
                 <span className={`status-indicator ${status}`}></span>
                 <span class="status-text">{message}</span>
