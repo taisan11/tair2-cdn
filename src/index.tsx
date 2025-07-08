@@ -3,11 +3,14 @@ import { renderer } from './renderer'
 import {Script} from "vite-ssr-components/hono"
 import {etag} from "hono/etag"
 import {cache} from "hono/cache"
+import * as v from 'valibot'
+import {vValidator} from "@hono/valibot-validator"
 
 interface Bindings {
   tair2_cdn: R2Bucket
-  API_KEY?: string
-  VIEW_LIST_WITH_PASS?: string
+  tair2_cdn_kv:KVNamespace;
+  API_KEY?: string;
+  VIEW_LIST_WITH_PASS?: string;
 }
 
 // R2Range型定義（一時的にコメントアウト）
@@ -84,58 +87,69 @@ app.get('/', (c) => {
 })
 
 app.post("/upload", async (c) => {
-  // API認証チェック（API_KEYが設定されている場合のみ）
-  if (c.env.API_KEY) {
-    const apiKey = c.req.header("x-api-key") || c.req.query("key")
-    if (apiKey !== c.env.API_KEY) {
-      return c.json({ error: 'Unauthorized' }, 401)
-    }
-  }
-
   const formData = await c.req.formData()
   const file = formData.get('file') as File
+  const name = formData.get('name') as string | null
 
   if (!file) {
     return c.json({ error: 'No file uploaded' }, 400)
   }
 
+  let uploadFileName = file.name
+
+  if (name) {
+    const kvFileName = await c.env.tair2_cdn_kv.get(name)
+    if (kvFileName) {
+      uploadFileName = kvFileName
+      await c.env.tair2_cdn_kv.put(name, uploadFileName)
+    }
+  } else {
+    if (c.env.API_KEY) {
+      const apiKey = c.req.header("x-api-key") || c.req.query("key")
+      if (apiKey !== c.env.API_KEY) {
+        return c.json({ error: 'Unauthorized' }, 401)
+      }
+    }
+  }
+
   const results: string[] = []
 
   // 圧縮可能かどうか自動判定
-  if (shouldCompress(file.type, file.name)) {
+  if (shouldCompress(file.type, uploadFileName)) {
     try {
       // gzip圧縮してアップロード
       const gzipStream = await compressFile(file, 'gzip')
-      await c.env.tair2_cdn.put(`${file.name}.gz`, gzipStream, {
+      await c.env.tair2_cdn.put(`${uploadFileName}.gz`, gzipStream, {
         httpMetadata: {
           contentType: file.type,
           contentEncoding: 'gzip'
         },
       })
-      results.push(`Gzip compressed file uploaded: ${file.name}.gz`)
+      results.push(`Gzip compressed file uploaded: ${uploadFileName}.gz`)
     } catch (error) {
       results.push(`Compression failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
       // 圧縮に失敗した場合は元ファイルをアップロード
-      await c.env.tair2_cdn.put(file.name, file.stream(), {
+      await c.env.tair2_cdn.put(uploadFileName, file.stream(), {
         httpMetadata: {
           contentType: file.type,
         },
       })
-      results.push(`Original file uploaded as fallback: ${file.name}`)
+      results.push(`Original file uploaded as fallback: ${uploadFileName}`)
     }
   } else {
     // 圧縮対象外ファイルは元ファイルをアップロード
-    await c.env.tair2_cdn.put(file.name, file.stream(), {
+    await c.env.tair2_cdn.put(uploadFileName, file.stream(), {
       httpMetadata: {
         contentType: file.type,
       },
     })
-    results.push(`Original file uploaded (compression not applicable): ${file.name}`)
+    results.push(`Original file uploaded (compression not applicable): ${uploadFileName}`)
   }
 
   return c.json({ 
     message: 'File uploaded successfully', 
-    fileName: file.name,
+    fileName: uploadFileName,
+    name: name || undefined,
     results: results
   })
 })
@@ -208,6 +222,57 @@ app.get('/files', async (c) => {
       </table>
     </div>
   )
+})
+
+const uploadKeySchema = v.object({
+  // APIキー
+  key: v.string(),
+  // ID
+  name:v.string()
+})
+
+app.post("/api/uploadkey", vValidator("json",uploadKeySchema), async (c) => {
+  const { key, name } = c.req.valid("json")
+  // API認証チェック
+  if (c.env.API_KEY && key !== c.env.API_KEY) {
+    return c.json({ error: 'Unauthorized' }, 401)
+  }
+  // アップロードキーの保存
+  c.env.tair2_cdn_kv.put(name, key, {
+    expirationTtl: 60 * 60 * 12 // 12時間有効
+  })
+  return c.json({ message: 'Created upload link',name})
+})
+
+app.get("/upload/:name", async (c) => {
+  const name = c.req.param("name")
+  if (await c.env.tair2_cdn_kv.get(name)) {
+    return c.render(<div class="container">
+      <h1>tair2-cdn</h1>
+      <p>簡易的なうｐろだ</p>
+      <div id="form" name={name}></div>
+      <Script src='/src/form.tsx'></Script>
+    </div>)
+  } else {
+    return c.render(<div class="container">
+      <h1>Upload Link Not Found</h1>
+      <div class="error-message">
+        <p>指定されたアップロードリンク <code>{name}</code> が見つかりません。</p>
+        <p>リンクが正しいか確認してください。</p>
+      </div>
+      <div class="error-actions">
+        <a href="/" class="back-link">Back to Home</a>
+        <a href="/files" class="back-link">View All Files</a>
+      </div>
+    </div>)
+  }
+})
+
+app.get("/download/:name", async (c) => {
+  const name = c.req.param("name")
+  c.header("Cache-Control", "public, max-age=31536000, immutable")
+  c.header("Vary", "Accept-Encoding")
+  return c.redirect(`/files/${name}`, 302)
 })
 
 app.get('/files/:fileName', async (c) => {

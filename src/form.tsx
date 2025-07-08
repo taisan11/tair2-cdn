@@ -8,6 +8,16 @@ const UploadForm = () => {
     const [downloadUrl, setDownloadUrl] = useState<string>('')
     const [apiKey, setApiKey] = useState<string>('')
 
+    // 追加: name属性を取得する
+    useEffect(() => {
+        const formDiv = document.getElementById('form')
+        if (formDiv && formDiv.hasAttribute('name')) {
+            setName(formDiv.getAttribute('name') || '')
+        }
+    }, [])
+
+    const [name, setName] = useState<string>('')
+
     const handleSubmit = async (e: Event) => {
         e.preventDefault()
         if (!file) {
@@ -18,6 +28,10 @@ const UploadForm = () => {
 
         const formData = new FormData()
         formData.append('file', file)
+        // name属性があれば追加
+        if (name) {
+            formData.append('name', name)
+        }
         
         const headers: Record<string, string> = {}
         if (apiKey) {
