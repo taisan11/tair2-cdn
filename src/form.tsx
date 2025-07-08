@@ -7,17 +7,6 @@ const UploadForm = () => {
     const [status, setStatus] = useState<string>('ready')
     const [downloadUrl, setDownloadUrl] = useState<string>('')
     const [apiKey, setApiKey] = useState<string>('')
-    const [name, setName] = useState<string>('')
-
-    // name属性を取得する
-    useEffect(() => {
-        const formDiv = document.getElementById('form')
-        if (formDiv && formDiv.hasAttribute('name')) {
-            setName(formDiv.getAttribute('name') || '')
-        } else {
-            setName('') // name属性がなければ空文字にする
-        }
-    }, [])
 
     const handleSubmit = async (e: Event) => {
         e.preventDefault()
@@ -30,8 +19,8 @@ const UploadForm = () => {
         const formData = new FormData()
         formData.append('file', file)
         // name属性があれば追加
-        if (name) {
-            formData.append('name', name)
+        if (document.getElementById('form')?.hasAttribute('name')) {
+            formData.append('name', document.getElementById('form')!.getAttribute('name') || '')
         }
         
         const headers: Record<string, string> = {}
@@ -77,7 +66,7 @@ const UploadForm = () => {
         <>
             <form onSubmit={handleSubmit}>
                 {/* nameがない場合のみAPI Key入力を表示 */}
-                {!name && (
+                {!document.getElementById('form')?.hasAttribute('name') && (
                     <div class="form-group">
                         <label for="api-key">API Key (if required):</label>
                         <input 
@@ -100,14 +89,6 @@ const UploadForm = () => {
                         onChange={(e) => setFile((e.target as HTMLInputElement).files?.[0] || null)} 
                     />
                 </div>
-
-                {/* name属性があれば表示 */}
-                {name && (
-                    <div class="form-group">
-                        <label>Name attribute:</label>
-                        <span>{name}</span>
-                    </div>
-                )}
                 <button type="submit" disabled={!file}>Upload</button>
             </form>
             <input type="text" id="downloadUrl" placeholder="Download URL" value={downloadUrl} readOnly />
